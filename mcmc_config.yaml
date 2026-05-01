@@ -1,0 +1,64 @@
+# Configure file for prospector_mcmc.py
+Catalog:
+  filename: data/hotdog_l4_specz_collate_gals.parq
+  SPHERExRefID: 1663027938116763658
+  filter_list: /Users/brianwang76/SPHEREx/SPHEREx-L4-Redshift-Pipeline/redshifts/data/FILTER/SPHEREx_306/fiducial_filters.txt
+
+MCMC_settings:
+  nwalkers: 32
+  jitter: 1.0E-4
+  nsteps: 3000
+  discard: 1000
+  thin: 10
+  zprior: True
+  parallel: False
+  save_sampler: False
+  sampler_filename: use_id    # specific text filename, or 'use_id' to save as pros_mcmc_{SPHERExRefID}.h5
+  save_plots: True
+  plots_dir: .
+  verbose: True
+  output_dir: .
+  output_filename: use_id     # filename without extension, for both report (.yaml) and mcmc results (.npz) 
+
+Parameters:
+  # enter Y for free fitting parameter, numerical value for fixed during MCMC
+
+  # choose blocks you want and uncomment them
+    # --------- parametric_sfh ---------
+  # tage_tuniv: Y
+  # tau: Y
+  # fage_trunc: Y
+  # sf_slope: Y
+  # fburst: Y
+  # fage_burst: Y
+  # --------- parametric_sfh ---------
+
+  # --------- continuity_sfh ---------
+  nbins: 7              # number of age bins, this CANNOT be a free parameter
+  logsfr_ratios: Y      # contains nbins-1 parameters
+  # --------- continuity_sfh ---------
+
+  # common parameters
+  zred: Y
+  logzsol: Y
+  logmass: Y
+  # dust attenuation
+  dust2: Y
+  dust_ratio: Y
+  dust_index: Y
+  # dust emission
+  # duste_loggamma: Y
+  duste_gamma: Y
+  duste_umin: Y
+  duste_qpah: Y
+  # nebular emission
+  add_neb_emission: False # only True or False
+  add_neb_continuum: True # only True or False
+  gas_logz: 0.0
+  gas_logu: -2.0
+  # agn torus emission
+  add_agn: False          # only True or False
+  fagn: 1.0E-4
+  agn_tau: 5.0
+
+
