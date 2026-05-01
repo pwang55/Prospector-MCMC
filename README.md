@@ -2,6 +2,13 @@
 
 This repo contains several scripts and tools for using prospector and running MCMC with prospector.  
 
+Some notable packages required for this repo:
+- prospector (and FSPS, python-fsps)
+- sedpy
+- h5py
+- numba
+- astropy
+- emcee
 
 # Usages
 
