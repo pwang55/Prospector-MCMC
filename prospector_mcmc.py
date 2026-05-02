@@ -14,6 +14,7 @@ Notes:
 import os
 import numpy as np
 import pandas as pd
+import pyarrow.dataset as ds
 import yaml
 import emcee
 import multiprocessing
@@ -316,6 +317,13 @@ external_phot_lbs = {
     'WISE': lbs_wise
 }
 
+# Reference catalog external photometry column names
+LS_cols = ['LS_g', 'LS_r', 'LS_z']
+PS1_cols = ['PS1_g', 'PS1_r', 'PS1_i', 'PS1_z', 'PS1_y']
+twomass_cols = ['2MASS_J', '2MASS_H', '2MASS_Ks']
+wise_cols = ['WISE_W1', 'WISE_W2', 'WISE_W3', 'WISE_W4']
+all_refcat_surveys = [LS_cols, PS1_cols, twomass_cols, wise_cols]
+
 class catalog:
     """
     Read input SPHEREx data format and convert to useful arrays
@@ -366,14 +374,8 @@ class catalog:
         if SPHERExRefID is not None:
             idx = np.where(self.spherex_ids == SPHERExRefID)[0][0]
 
-        LS_cols = ['LS_g', 'LS_r', 'LS_z']
-        PS1_cols = ['PS1_g', 'PS1_r', 'PS1_i', 'PS1_z', 'PS1_y']
-        twomass_cols = ['2MASS_J', '2MASS_H', '2MASS_Ks']
-        wise_cols = ['WISE_W1', 'WISE_W2', 'WISE_W3', 'WISE_W4']
-        all_surveys = [LS_cols, PS1_cols, twomass_cols, wise_cols]
-
         external_phots = {}
-        for i, survey_cols in enumerate(all_surveys):
+        for i, survey_cols in enumerate(all_refcat_surveys):
             ndat = len(survey_cols)
             survey_name = survey_cols[0].split('_')[0]
             wavelength = external_phot_lbs[survey_name]
@@ -388,6 +390,53 @@ class catalog:
                                             'flux_error': flux_error
                                             }
         return external_phots
+
+class catalog_dataset:
+    """
+    Use pyarrow.dataset to access SPHEREx L4 Catalog
+
+    Parameters
+    ----------
+    filename : str
+        L4 parquet catalog filename
+    
+    Methods
+    -------
+    get_row(SPHERExRefID) : 
+        Get useful information from a single row with SPHERExRefID
+        Creates
+
+    """
+    def __init__(self, filename):
+        self.dataset = ds.dataset(filename, format='parquet')
+
+    def get_row(self, SPHERExRefID):
+        ds_filters = ds.field('SPHERExRefID') == SPHERExRefID
+        tab = self.dataset.to_table(filter=ds_filters)
+        self.zspec = tab['z_specz'][0].as_py()
+        self.zphot = tab['z_best_gals'][0].as_py()
+        self.zphot_u68 = tab['z_err_u68_gals'][0].as_py()
+        self.zphot_l68 = tab['z_err_l68_gals'][0].as_py()
+        self.zphot_std = tab['z_err_std_gals'][0].as_py()
+        self.frac102 = tab['frac_sampled_102'][0].as_py()
+        self.spec = tab['flux_dered_fiducial'].to_numpy()[0]
+        self.err = tab['flux_err_dered_fiducial'].to_numpy()[0]
+
+        self.external_phots = {}
+        for i, survey_cols in enumerate(all_refcat_surveys):
+            ndat = len(survey_cols)
+            survey_name = survey_cols[0].split('_')[0]
+            wavelength = external_phot_lbs[survey_name]
+            flux = np.zeros(ndat)
+            flux_error = np.zeros(ndat)
+            for j, colname in enumerate(survey_cols):
+                flux[j] = tab[colname][0].as_py()
+                flux_error[j] = tab[colname+'_error'][0].as_py()
+            self.external_phots[survey_name] = {
+                                            'wavelength':wavelength,
+                                            'flux': flux,
+                                            'flux_error': flux_error
+                                            }
 
 
 def save_h5_results(mcmc_results, 
@@ -2084,20 +2133,34 @@ def main():
     if verbose:
         print('Read input catalog...')
     # read the parquet catalog file
-    cat = catalog(filename=filename)
-    idx = np.where(cat.spherex_ids == spherex_id)[0][0]
-    zspec = cat.zspecs[idx]
-    zphot = cat.zphots[idx]
-    zphot_u68 = cat.zphots_u68[idx]
-    zphot_l68 = cat.zphots_l68[idx]
-    zphot_std = cat.zphots_std[idx]
+    cat = catalog_dataset(filename=filename)
+    cat.get_row(SPHERExRefID=spherex_id)
+    zspec = cat.zspec
+    zphot = cat.zphot
+    zphot_u68 = cat.zphot_u68
+    zphot_l68 = cat.zphot_l68
+    zphot_std = cat.zphot_std
     zsig = (zphot_u68-zphot_l68)/2
-    # zsig = cat.zsigs[idx]
-    spec = cat.spectra[idx]
-    err = cat.error[idx]
-    frac102 = cat.frac102[idx]
+    spec = cat.spec
+    err = cat.err
+    frac102 = cat.frac102
     nonzeros = err != 50000.0
-    external_phots = cat.get_external_phots(SPHERExRefID=spherex_id)
+    external_phots = cat.external_phots
+
+    # cat = catalog(filename=filename)
+    # idx = np.where(cat.spherex_ids == spherex_id)[0][0]
+    # zspec = cat.zspecs[idx]
+    # zphot = cat.zphots[idx]
+    # zphot_u68 = cat.zphots_u68[idx]
+    # zphot_l68 = cat.zphots_l68[idx]
+    # zphot_std = cat.zphots_std[idx]
+    # zsig = (zphot_u68-zphot_l68)/2
+    # # zsig = cat.zsigs[idx]
+    # spec = cat.spectra[idx]
+    # err = cat.error[idx]
+    # frac102 = cat.frac102[idx]
+    # nonzeros = err != 50000.0
+    # external_phots = cat.get_external_phots(SPHERExRefID=spherex_id)
 
     if verbose:
         print('Creating MCMC instance...')
@@ -2157,15 +2220,10 @@ def main():
                     )
 
         # get model and SFH percentiles for sed_sfh plot
-
-
         if pmcmc.sfh_type == 'continuity_sfh':
             qs_agelims, qs_agebins_all_sfrs = continuity_sfh_percentiles_steps(
                 mcmc_results['flat_samples'],
                 theta=pmcmc.theta,
-                # zred_idx=pmcmc.theta.zred_idx,
-                # logmass_idx=pmcmc.theta.logmass_idx,
-                # logsfr_ratios_idx=pmcmc.theta.logsfr_ratios_idx,
                 n_transition=50,
                 transition_start_idx=3,
                 percentiles=[16,50,84]
@@ -2202,13 +2260,6 @@ def main():
             qs_tl, qs_sfrs, qs_tl_burst = parametric_sfh_percentiles(
                 mcmc_results['flat_samples'],
                 theta=pmcmc.theta,
-                # zred_idx=pmcmc.theta.zred_idx,
-                # tage_tuniv_idx=pmcmc.theta.tage_tuniv_idx,
-                # logmass_idx=pmcmc.theta.logmass_idx,
-                # tau_idx=pmcmc.theta.tau_idx,
-                # fburst_idx=pmcmc.theta.fburst_idx,
-                # fage_burst_idx=pmcmc.theta.fage_burst_idx,
-                # sf_slope_idx=pmcmc.pmcmc.theta.sf_slope_idx,
                 pts=200,
                 percentiles=[16, 50, 84]
             )
