@@ -20,7 +20,7 @@ from numba import jit, njit
 cosmology = Planck18
 
 # Read SPHEREx filters
-def read_filters(filter_list, half_length=105, return_lamb_obs=False):
+def read_filters(filter_list, half_length=105, return_lamb_obs=False, response_threshold=0.1):
     '''
     Read SPHEREx official filters and return ndarray of (nfilt, 2, 2*half_length)
     
@@ -35,6 +35,7 @@ def read_filters(filter_list, half_length=105, return_lamb_obs=False):
         If half_length*2 > existing wavelength grid, fill longer wavelength side with zeros
     return_lamb_obs : bool, default=False
         If True, also returns the lamb_obs by finding 'fiducial_filters_cent_waves.txt' at the same directory as the filter_list
+        If the cent_wave file can't be found, calculate by weight average of normalized response>0.1
         
     Returns
     -------
@@ -80,12 +81,20 @@ def read_filters(filter_list, half_length=105, return_lamb_obs=False):
         filters[i][1] = response_i1
         # filters.append((wavelength_i1, response_i1))
     if return_lamb_obs:
-        filter_central_wavelengths = filter_list.replace('fiducial_filters.txt', 'fiducial_filters_cent_waves.txt')
-        lamb_obs = np.genfromtxt(filter_central_wavelengths, delimiter=' ')[:,1]
+        try:
+            filter_central_wavelengths = filter_list.replace('fiducial_filters.txt', 'fiducial_filters_cent_waves.txt')
+            lamb_obs = np.genfromtxt(filter_central_wavelengths, delimiter=' ')[:,1]
+        except:
+            lamb_obs = np.zeros(Nf)
+            for i in range(Nf):
+                wav_i = filters[i][0]
+                res_i = filters[i][1] / np.max(filters[i][1])
+                mask = res_i > response_threshold
+                lamb_obs[i] = np.sum(wav_i[mask] * res_i[mask]) / np.sum(res_i[mask])
         return filters, lamb_obs
     else:
         return filters
-
+    
 @njit(fastmath=True)
 def f_convolve_filter(wl, flux, filters=None):
     '''
@@ -166,7 +175,7 @@ class custom_prospector:
         Using a given myparams or a model_params to create spectra using Prospector
 
     """
-    def __init__(self, sfh_type='continuity_sfh', filters=None):
+    def __init__(self, sfh_type='continuity_sfh', filters=None, zcontinuous=2, pmetal=-1.0):
         self.sfh_type = sfh_type
 
         # some pre-fixed parameters
@@ -175,10 +184,10 @@ class custom_prospector:
         
         # depending on sfh_type, create the basis sps object from fsps
         if self.sfh_type == 'parametric_sfh':
-            self.sps = CSPSpecBasis(zcontinuous=1)
+            self.sps = CSPSpecBasis(zcontinuous=zcontinuous, pmetal=pmetal)
             self.sfh_init = 5
         elif self.sfh_type == 'continuity_sfh':
-            self.sps = FastStepBasis(zcontinuous=1)
+            self.sps = FastStepBasis(zcontinuous=zcontinuous, pmetal=pmetal)
             self.sfh_init = 3
 
         self.model_params = TemplateLibrary[sfh_type]
