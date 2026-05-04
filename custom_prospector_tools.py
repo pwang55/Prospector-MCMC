@@ -83,7 +83,7 @@ def read_filters(filter_list, half_length=105, return_lamb_obs=False, response_t
     if return_lamb_obs:
         try:
             filter_central_wavelengths = filter_list.replace('fiducial_filters.txt', 'fiducial_filters_cent_waves.txt')
-            lamb_obs = np.genfromtxt(filter_central_wavelengths, delimiter=' ')[:,1]
+            lamb_obs = np.genfromtxt(filter_central_wavelengths)[:,1]
         except:
             lamb_obs = np.zeros(Nf)
             for i in range(Nf):
