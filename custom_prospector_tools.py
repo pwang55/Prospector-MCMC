@@ -314,7 +314,10 @@ class custom_prospector:
                 # pass
 
         tuniv = cosmology.age(params['zred']).value
-        lumdist = cosmology.luminosity_distance(params['zred']).value
+        if params['zred'] == 0.0:
+            lumdist = 1e-5
+        else:
+            lumdist = cosmology.luminosity_distance(params['zred']).to('Mpc').value
         this_model_params['lumdist'] = {"N": 1, "isfree": False, "init": lumdist, "units":"Mpc"}
         # convert dust_ratio to dust1
         this_model_params['dust1'] = {'N': 1, 'isfree': False, 'init': params['dust2']*params['dust_ratio']}
