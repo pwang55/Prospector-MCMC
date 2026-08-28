@@ -128,6 +128,103 @@ def f_convolve_filter(wl, flux, filters=None):
         flux_conv = flux
     return flux_conv
 
+def emu_param_to_x(emu_param):
+    '''
+    Translate an emuator parameter dictionary to both emulator input x and custom_prospector object parameter
+
+    Parameters
+    ----------
+    param : dict
+        modeled variables in prospector parameters (allowed to change and not use default fixed value)
+
+    Returns
+    -------
+    x : ndarray of shape (nparams, )
+        1-D array compatible with emulator input
+    '''
+
+    x = np.concatenate([np.atleast_1d(v).ravel() for v in emu_param.values()])
+    return x
+
+
+def emu_param_to_pros_param(emu_param, default_prospector_params=None):
+    '''
+    Translate an emuator parameter dictionary to both emulator input x and custom_prospector object parameter
+
+    Parameters
+    ----------
+    param : dict or pandas.core.series.Series
+        modeled variables in prospector parameters (allowed to change and not use default fixed value)
+
+    Returns
+    -------
+    prospector_params : dict
+        Full custom_prospector object compatible parameter dictionary
+    '''
+    if 'logsfr_ratios' in emu_param.keys():
+        if default_prospector_params is None:
+            default_prospector_params = {'zred': 0.1,
+                                'logzsol': 0.0,
+                                'logmass': 10,
+                                'nbins': 7,
+                                'logsfr_ratios': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                                'dust2': 1.0,
+                                'dust_ratio': 1.0,
+                                'dust_index': -1.2,
+                                'duste_gamma': 0.01,
+                                'duste_umin': 1.0,
+                                'duste_qpah': 2.0,
+                                'add_neb_emission': False,
+                                'add_neb_continuum': False,
+                                'gas_logz': 0.0,
+                                'gas_logu': -2.0,
+                                'add_agn': False,
+                                'fagn': 0.0001,
+                                'agn_tau': 5.0}
+        default_prospector_params['nbins'] = len(emu_param['logsfr_ratios']) + 1
+    # TODO select appropriate default values
+    elif 'tage_tuniv' in emu_param.keys() or 'tau' in emu_param.keys():
+        if default_prospector_params is None:
+            default_prospector_params = {'zred': 0.1,
+                                'logzsol': 0.0,
+                                'logmass': 10,
+                                'tage_tuniv': 0.9,
+                                'tau': 1,
+                                'fage_trunc': 0.9,
+                                'sf_slope': -1.0,
+                                'fburst': 0.0,
+                                'fage_burst': 0.8,
+                                'dust2': 0.0,
+                                'dust_ratio': 1.0,
+                                'dust_index': -1.2,
+                                'duste_gamma': 0.01,
+                                'duste_umin': 1.0,
+                                'duste_qpah': 2.0,
+                                'add_neb_emission': False,
+                                'add_neb_continuum': False,
+                                'gas_logz': 0.0,
+                                'gas_logu': -2.0,
+                                'add_agn': False,
+                                'fagn': 0.0001,
+                                'agn_tau': 5.0}
+
+    for _, key in enumerate(list(emu_param.keys())):
+        default_prospector_params[key] = emu_param[key]
+    
+    return default_prospector_params
+
+
+def emu_params_to_x(df=None, emu_params=None):
+    '''
+    Convert a pandas dataframe or parameter dictionary of emulator inputs to a 2d array that are compatible with emulator model.fit() or model.predict()
+    '''
+    # TODO automatically detect input type
+    if df is not None:
+        return np.hstack([np.atleast_2d(np.vstack(df[col])) for col in df.columns])
+    elif emu_params is not None:
+        return np.column_stack([np.asarray(v).reshape(len(v), -1) for v in emu_params.values()])
+
+
 class custom_prospector:
     """
     Our custom class for generating prospector spectra
