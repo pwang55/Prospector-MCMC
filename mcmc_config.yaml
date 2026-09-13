@@ -7,17 +7,17 @@ Catalog:
 MCMC_settings:
   nwalkers: 32
   jitter: 1.0E-4
-  nsteps: 3000
-  discard: 1000
-  thin: 10
+  nsteps: 10000
+  discard: 3000
+  thin: 20
   zprior: True
   parallel: False
   save_sampler: False
   sampler_filename: use_id    # specific text filename, or 'use_id' to save as pros_mcmc_{SPHERExRefID}.h5
   save_plots: True
-  plots_dir: .
+  plots_dir: outputs
   verbose: True
-  output_dir: .
+  output_dir: outputs
   output_filename: use_id     # filename without extension, for both report (.yaml) and mcmc results (.npz) 
 
 Parameters:
@@ -34,7 +34,7 @@ Parameters:
   # --------- parametric_sfh ---------
 
   # --------- continuity_sfh ---------
-  nbins: 7              # number of age bins, this CANNOT be a free parameter
+  nbins: 5              # number of age bins, this CANNOT be a free parameter
   logsfr_ratios: Y      # contains nbins-1 parameters
   # --------- continuity_sfh ---------
 
@@ -44,16 +44,16 @@ Parameters:
   logmass: Y
   # dust attenuation
   dust2: Y
-  dust_ratio: Y
+  dust_ratio: 1.0
   dust_index: Y
   # dust emission
   # duste_loggamma: Y
-  duste_gamma: Y
-  duste_umin: Y
+  duste_gamma: 0.01
+  duste_umin: 1.0
   duste_qpah: Y
   # nebular emission
   add_neb_emission: False # only True or False
-  add_neb_continuum: True # only True or False
+  add_neb_continuum: False # only True or False
   gas_logz: 0.0
   gas_logu: -2.0
   # agn torus emission

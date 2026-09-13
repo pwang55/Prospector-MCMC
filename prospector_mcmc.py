@@ -1033,19 +1033,6 @@ def plot_sed_sfh(lamb_obs,
         plt.savefig(output_dir / filename, dpi=dpi)
 
 
-def test1():
-    a = 10.0
-    return a 
-
-# testing function
-def test_plot_fig(a=None):
-    if a is not None:
-        a /= 1e9
-    else:
-        a = -10
-    fig, ax = plt.subplots()
-    ax.plot([0,1],[0,a])
-    # plt.show()
 
 def display_fits(theta_percentiles, ylabels=None):
     """
@@ -1274,17 +1261,17 @@ def continuity_sfh_percentiles_steps(flat_samples,
     """
     if type(percentiles) is int or type(percentiles) is float:
         percentiles = [percentiles]
+    if theta is not None:
+        zred_idx = theta.zred_idx
+        logmass_idx = theta.logmass_idx
+        logsfr_ratios_idx = theta.logsfr_ratios_idx
+
     n_percentiles = len(percentiles)
     nbins = len(logsfr_ratios_idx)+1
     transition_idx = np.arange(transition_start_idx, nbins)
     # loop over each step in MCMC chain to calculate agebins and SFRs
     all_age_lims = np.zeros((flat_samples.shape[0], nbins+1)) #/1e9
     all_sfrs = np.zeros((flat_samples.shape[0], nbins))
-
-    if theta is not None:
-        zred_idx = theta.zred_idx
-        logmass_idx = theta.logmass_idx
-        logsfr_ratios_idx = theta.logsfr_ratios_idx
 
     for i, _ in enumerate(flat_samples):
         theta_i = flat_samples[i]
@@ -1998,14 +1985,14 @@ class prospector_mcmc:
                 'flat_mfracs': flat_mfracs,
                 'theta_percentiles': theta_percentiles,
                 'med_myparam': med_myparam,
-                'med_lbs': med_lbs,
-                'med_spectra': med_spectra,
-                'med_flux_conv': med_flux_conv,
-                'med_mfrac': med_mfrac,
+                'lbs_med': med_lbs,
+                'flux_med': med_spectra,
+                'flux_med_conv': med_flux_conv,
+                'mfrac_med': med_mfrac,
                 'mfracs_percentiles': mfracs_percentiles,
-                'med_agebins': med_agebins,
-                'med_massbins': med_massbins,
-                'med_sfrs': med_sfrs,
+                'agebins_med': med_agebins,
+                'massbins_med': med_massbins,
+                'sfrs_med': med_sfrs,
                 'ylabels': self.theta.ylabels,
                 'autocorr': autocorr
             }
@@ -2023,18 +2010,18 @@ class prospector_mcmc:
                 'flat_mfracs': flat_mfracs,
                 'theta_percentiles': theta_percentiles,
                 'med_myparam': med_myparam,
-                'med_lbs': med_lbs,
-                'med_spectra': med_spectra,
-                'med_flux_conv': med_flux_conv,
-                'med_mfrac': med_mfrac,
+                'lbs_med': med_lbs,
+                'flux_med': med_spectra,
+                'flux_med_conv': med_flux_conv,
+                'mfrac_med': med_mfrac,
                 'mfracs_percentiles': mfracs_percentiles,
-                'med_tage': tage,
+                'tage_med': tage,
                 # 'med_tau': med_myparam['tau'],
-                'med_tburst': tburst,
-                'med_ttrunc': ttrunc,
-                'med_sfh_scale': scale,
-                'med_lookback_time': tl,
-                'med_sfrs': sfr,
+                'tburst_med': tburst,
+                'ttrunc_med': ttrunc,
+                'sfh_scale_med': scale,
+                'lookback_time_med': tl,
+                'sfrs_med': sfr,
                 # 'med_sf_slope': med_myparam['sf_slope']
                 'ylabels': self.theta.ylabels,
                 'autocorr': autocorr
@@ -2129,6 +2116,8 @@ def main():
         sampler_filename = f"mcmc_results_sampler_{spherex_id}.h5"
     if output_filename == 'use_id':
         output_filename = f"mcmc_results_report_{spherex_id}.h5"
+
+    sampler_filename = output_dir + "/" + sampler_filename
 
     if verbose:
         print('Read input catalog...')
@@ -2232,10 +2221,10 @@ def main():
             plot_sed_sfh(lamb_obs,
                          spec,
                          err,
-                         lamb_model=mcmc_results['med_lbs']*(1+theta_percentiles[1, pmcmc.theta.zred_idx]),
-                         spec_model=mcmc_results['med_spectra'],
-                         agelims_model=mcmc_results['med_agebins'],
-                         sfrsteps_model=mcmc_results['med_sfrs'],
+                         lamb_model=mcmc_results['lbs_med']*(1+theta_percentiles[1, pmcmc.theta.zred_idx]),
+                         spec_model=mcmc_results['flux_med'],
+                         agelims_model=mcmc_results['agebins_med'],
+                         sfrsteps_model=mcmc_results['sfrs_med'],
                          qs_agelims=qs_agelims,
                          qs_sfrsteps=qs_agebins_all_sfrs,
                          external_phots=external_phots,
@@ -2267,11 +2256,11 @@ def main():
             plot_sed_sfh(lamb_obs,
                          spec,
                          err,
-                         lamb_model=mcmc_results['med_lbs']*(1+med_myparam['med_zred']),
-                         spec_model=mcmc_results['med_spectra'],
-                         tl_model=mcmc_results['med_lookback_time'],
-                         sfr_model=mcmc_results['med_sfrs'],
-                         tl_burst_model=mcmc_results['med_tage']-mcmc_results['med_tburst'],
+                         lamb_model=mcmc_results['lbs_med']*(1+med_myparam['zred']),
+                         spec_model=mcmc_results['flux_med'],
+                         tl_model=mcmc_results['lookback_time_med'],
+                         sfr_model=mcmc_results['sfrs_med'],
+                         tl_burst_model=mcmc_results['tage_med']-mcmc_results['tburst_med'],
                          qs_tl=qs_tl,
                          qs_sfrs=qs_sfrs,
                          qs_tl_burst=qs_tl_burst,

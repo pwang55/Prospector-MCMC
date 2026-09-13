@@ -164,8 +164,8 @@ def emu_param_to_pros_param(emu_param, default_prospector_params=None):
     if 'logsfr_ratios' in emu_param.keys():
         if default_prospector_params is None:
             default_prospector_params = {'zred': 0.1,
-                                'logzsol': 0.0,
                                 'logmass': 10,
+                                'logzsol': 0.0,
                                 'nbins': 7,
                                 'logsfr_ratios': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                                 'dust2': 1.0,
@@ -186,8 +186,8 @@ def emu_param_to_pros_param(emu_param, default_prospector_params=None):
     elif 'tage_tuniv' in emu_param.keys() or 'tau' in emu_param.keys():
         if default_prospector_params is None:
             default_prospector_params = {'zred': 0.1,
-                                'logzsol': 0.0,
                                 'logmass': 10,
+                                'logzsol': 0.0,
                                 'tage_tuniv': 0.9,
                                 'tau': 1,
                                 'fage_trunc': 0.9,
@@ -324,8 +324,8 @@ class custom_prospector:
 
         myparams = {
             'zred': 0.1,
-            'logzsol': 0.0,
-            'logmass': 10
+            'logmass': 10,
+            'logzsol': 0.0
         }
         if self.sfh_type == 'continuity_sfh':
             # tuniv = cosmology.age(z)
