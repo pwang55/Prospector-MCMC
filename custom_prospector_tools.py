@@ -20,7 +20,7 @@ from numba import jit, njit
 cosmology = Planck18
 
 # Read SPHEREx filters
-def read_filters(filter_list, half_length=105, return_lamb_obs=False, response_threshold=0.1):
+def read_filters(filter_list, half_length=105, return_lamb_obs=False, response_threshold=0.1, return_unique_inverse=False):
     '''
     Read SPHEREx official filters and return ndarray of (nfilt, 2, 2*half_length)
     
@@ -33,15 +33,30 @@ def read_filters(filter_list, half_length=105, return_lamb_obs=False, response_t
         Currently, official SPHEREx filters don't have the same size; half_length of 105 is a good middle ground for 306 bands
         to cut off unimportant outside parts while preserving response to <3% accuracy.
         If half_length*2 > existing wavelength grid, fill longer wavelength side with zeros
+    return_unique_inverse : bool, default=False
+        If True, also return unique_wavelength, inverse_wavelength, conv_weights that will be
+        used in fast_convolve_filters()
     return_lamb_obs : bool, default=False
         If True, also returns the lamb_obs by finding 'fiducial_filters_cent_waves.txt' at the same directory as the filter_list
         If the cent_wave file can't be found, calculate by weight average of normalized response>0.1
-        
+    
     Returns
     -------
     filters : ndarray of shape (nfilt, 2, 2*half_length)
         Full array of all the filters' wavelength coverage (micron) and response
         For example, n_filter=i has wavelength filters[i][0] and response filters[i][1]
+    unique_wavelength : ndarray of shape (n_unique_wavs, )
+        Only return when return_unique_inverse=True
+        1-D array of unique wavelength points that are hstacked from all filters' wavelength grids
+    inverse_wavelength : ndarray of shape (n_total_wavs, )
+        Only return when return_unique_inverse=True
+        1-D mapping array of total hstacked wavelength grids to unique_wavelength with:
+        all_wavelength = unique_wavelength[inverse_wav]
+    conv_weights : ndarray of shape (nfilt, 2*half_length)
+        Only return when return_unique_inverse=True
+        weight for trapezoid integration that includes both wavelength grid spacing weights
+        and filter response weights, such that
+        np.trapezoid(flux * response) = np.sum(flux * conv_weights)
     lamb_obs : ndarray of shape (nfilt, )
         Only return when return_lamb_obs=True
     '''
@@ -80,6 +95,27 @@ def read_filters(filter_list, half_length=105, return_lamb_obs=False, response_t
         filters[i][0] = wavelength_i1
         filters[i][1] = response_i1
         # filters.append((wavelength_i1, response_i1))
+
+    # calculate convolution weights for filter convolution & integration
+    wavelengths = filters[:,0]
+    filter_responses = filters[:,1]
+    dx = np.diff(wavelengths, axis=1)
+    trap_weights = np.empty_like(wavelengths)
+
+    trap_weights[:, 0] = dx[:, 0] / 2
+    trap_weights[:, -1] = dx[:, -1] / 2
+    trap_weights[:, 1:-1] = (dx[:, :-1] + dx[:, 1:]) / 2
+    convolution_weights = trap_weights * filter_responses
+
+    # calculate unique wavelength points and the inverse map
+    all_wavelengths = np.concatenate([wavelengths[i] for i in range(Nf)])
+    unique_wavelength, inverse_wavelength = np.unique(all_wavelengths, return_inverse=True)
+
+    results = (filters,)
+
+    if return_unique_inverse:
+        results = results + (unique_wavelength, inverse_wavelength, convolution_weights,)
+
     if return_lamb_obs:
         try:
             filter_central_wavelengths = filter_list.replace('fiducial_filters.txt', 'fiducial_filters_cent_waves.txt')
@@ -91,9 +127,13 @@ def read_filters(filter_list, half_length=105, return_lamb_obs=False, response_t
                 res_i = filters[i][1] / np.max(filters[i][1])
                 mask = res_i > response_threshold
                 lamb_obs[i] = np.sum(wav_i[mask] * res_i[mask]) / np.sum(res_i[mask])
-        return filters, lamb_obs
-    else:
-        return filters
+        results = results + (lamb_obs,)
+
+    if not return_unique_inverse and not return_lamb_obs:
+        results = filters
+
+    return results
+    
     
 @njit(fastmath=True)
 def f_convolve_filter(wl, flux, filters=None):
@@ -124,6 +164,27 @@ def f_convolve_filter(wl, flux, filters=None):
             f_interp = np.interp(lb, wl, flux)
             fnu_i = np.trapezoid(f_interp*ftrans, lb)
             flux_conv[i] = fnu_i
+    else:
+        flux_conv = flux
+    return flux_conv
+
+
+# @njit(fastmath=True)
+def fast_convolve_filter(wl, flux, filters=None):
+    if filters is not None:
+        # wavelength = filters["wavelength"]
+        # response = filters["response"]
+        # unique_wavelength = filters["unique_wavelength"]
+        # inverse_wavelength = filters["inverse_wavelength"]
+        # conv_weights = filters["convolution_weights"]
+        wavelength = filters[0][:,0]
+        # response = filters[0][:,1]
+        unique_wls = filters[1]
+        inverse_wls = filters[2]
+        conv_weights = filters[3]
+        unique_flux_interp = np.interp(unique_wls, wl, flux)
+        flux_interps = unique_flux_interp[inverse_wls].reshape(wavelength.shape)
+        flux_conv = np.sum(flux_interps*conv_weights, axis=1)
     else:
         flux_conv = flux
     return flux_conv
@@ -272,7 +333,7 @@ class custom_prospector:
         Using a given myparams or a model_params to create spectra using Prospector
 
     """
-    def __init__(self, sfh_type='continuity_sfh', filters=None, zcontinuous=2, pmetal=-1.0):
+    def __init__(self, sfh_type='continuity_sfh', filters=None, zcontinuous=1):
         self.sfh_type = sfh_type
 
         # some pre-fixed parameters
@@ -281,10 +342,10 @@ class custom_prospector:
         
         # depending on sfh_type, create the basis sps object from fsps
         if self.sfh_type == 'parametric_sfh':
-            self.sps = CSPSpecBasis(zcontinuous=zcontinuous, pmetal=pmetal)
+            self.sps = CSPSpecBasis(zcontinuous=zcontinuous)
             self.sfh_init = 5
         elif self.sfh_type == 'continuity_sfh':
-            self.sps = FastStepBasis(zcontinuous=zcontinuous, pmetal=pmetal)
+            self.sps = FastStepBasis(zcontinuous=zcontinuous)
             self.sfh_init = 3
 
         self.model_params = TemplateLibrary[sfh_type]
@@ -535,7 +596,10 @@ class custom_prospector:
         wavelength = self.sps.wavelengths / 1e4
         if filters is not None:
             wavelength_ops = wavelength * (1+zred)
-            flux_conv = f_convolve_filter(wavelength_ops, spectra, filters=filters)
+            if isinstance(filters, tuple):
+                flux_conv = fast_convolve_filter(wavelength_ops, spectra, filters=filters)
+            else:
+                flux_conv = f_convolve_filter(wavelength_ops, spectra, filters=filters)
         else:
             flux_conv = 0.0
 

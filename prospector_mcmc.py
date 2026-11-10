@@ -212,16 +212,16 @@ class default_settings:
         except:
             n_logsfr_ratios = 6
         dict1 = {
-            'zred': 0.3,
+            'zred': 0.1,
+            'logmass': 11,
             'logzsol': 0.0,
-            'logmass': 10,
-            'dust2': 1.0,
+            'dust2': 0.3,
             'dust_ratio': 1.0,
             'dust_index': -1.0,
             'duste_loggamma': -2,
             'duste_gamma': 0.01,
             'duste_umin': 1.0,
-            'duste_qpah': 3.5,
+            'duste_qpah': 2.0,
             'gas_logz': 0.0,
             'gas_logu': -2.0,
             'fagn': 1e-4,
@@ -241,8 +241,8 @@ class default_settings:
         Pre-defined free parameters if user doesn't specify
         """
         default_params = ['zred', 
-                          'logzsol',
                           'logmass',
+                          'logzsol',
                           'dust2',
                           'dust_ratio',
                           'dust_index',
@@ -261,15 +261,15 @@ class default_settings:
     def default_priors(self, redshift=0.1, redshift_sigma=0.1):
         # use partial to pre-fill logpdf functions so that they can be easily called in log_prior
         prior_funcs = {
-            'zred':             partial(norm_logpdf_cutoffs, loc=redshift, scale=redshift_sigma, low=0.001, high=3.0),
-            'logzsol':          partial(uniform_logpdf, low=-2.0, high=0.4),
-            'logmass':          partial(uniform_logpdf, low=6, high=12),
+            'zred':             partial(norm_logpdf_cutoffs, loc=redshift, scale=redshift_sigma, low=0.00, high=3.0),
+            'logmass':          partial(uniform_logpdf, low=7.5, high=13.5),
+            'logzsol':          partial(uniform_logpdf, low=-2.0, high=0.2),
             'logsfr_ratios':    partial(t_logpdf_cutoffs, low=-5, high=5, df=2, loc=0, scale=0.3),
             # 'dust2':            partial(uniform_logpdf, low=0.0, high=3.0),
             'dust2':            partial(norm_logpdf_cutoffs, loc=0.3, scale=1, low=0.0, high=4.0),
             # 'dust_ratio':       partial(uniform_logpdf, low=0.0, high=2.0),
             'dust_ratio':       partial(norm_logpdf_cutoffs, loc=1, scale=0.3, low=0.0, high=2.0),
-            'dust_index':       partial(uniform_logpdf, low=-1.3, high=0.4),
+            'dust_index':       partial(uniform_logpdf, low=-1.2, high=0.4),
             # 'duste_gamma':      partial(lognorm_logpdf_cutoffs, norm_mean=-2, norm_sig=1, low=1e-4, high=1.0),
             'duste_gamma':      partial(uniform_logpdf, low=1e-4, high=1.0),
             'duste_loggamma':   partial(uniform_logpdf, low=-4.0, high=0.0),
@@ -740,6 +740,8 @@ def plot_sed_sfh(lamb_obs,
                  sfh_range_kwargs=None,
                  qs_tl_burst_kwargs=None,
                  save=False,
+                 wl_min=None,
+                 wl_max=None,
                  xscale='log',
                  yscale='log',
                  filename='mcmc_results_sed_sfh.png',
@@ -887,7 +889,9 @@ def plot_sed_sfh(lamb_obs,
                             err_obs[nonzeros],
                             **sed_obs_kwargs,
                             label='Observed spectra')
-
+            ymin0 , ymax0 = axi.get_ylim()  # TEMP
+            axi.set_ylim(ymin0, ymax0)
+            
             axi.plot(lamb_model,
                         spec_model,
                         **sed_model_kwargs,
@@ -895,13 +899,13 @@ def plot_sed_sfh(lamb_obs,
             axi.grid()
             lbs_mins = [np.min(lamb_obs)]
             lbs_maxs = [np.max(lamb_obs)]
-            if np.max(lamb_model)>7:
-                axi.set_xscale('log')
+
             if external_phots:
                 # Two dummy plots to cycle the color to tab:green
                 axi.plot([],[])
                 axi.plot([],[])
                 for key, each_phot_dict in external_phots.items():
+                    each_phot_dict['flux_error'][each_phot_dict['flux_error']<0] = 0.0   # TEMP
                     axi.errorbar(each_phot_dict['wavelength'],
                                     each_phot_dict['flux'],
                                     each_phot_dict['flux_error'],
@@ -913,7 +917,14 @@ def plot_sed_sfh(lamb_obs,
             axi.legend()
             xmin = np.min(lbs_mins) * 0.8
             xmax = np.max(lbs_maxs) * 1.2
+            if wl_min is not None:
+                xmin = wl_min
+            if wl_max is not None:
+                xmax = wl_max
+            if np.max(xmax)>7:
+                axi.set_xscale('log')
             axi.set_xlim(xmin, xmax)
+
             if title_kwargs is not None:
                 title_strings = []
                 spherex_id = title_kwargs.get('spherex_id')
@@ -1533,6 +1544,7 @@ class prospector_mcmc:
                  zprior=None,
                  filters=None,
                  parallel=None,
+                 output_dir=None,
                  save_sampler=None,
                  sampler_filename=None,
                  verbose=None
@@ -1561,6 +1573,10 @@ class prospector_mcmc:
                 self.save_sampler = settings['save_sampler']
             else:
                 self.save_sampler = save_sampler
+            if output_dir is None:
+                self.output_dir = settings["output_dir"]
+            else:
+                self.output_dir = output_dir
             if sampler_filename is None:
                 self.sampler_filename = settings['sampler_filename']
                 if self.sampler_filename == 'use_id':
@@ -1574,10 +1590,10 @@ class prospector_mcmc:
 
             if filters is None:
                 filter_list = config['Catalog']['filter_list']
-                self.filters = cpt.read_filters(filter_list)
+                self.filters = cpt.read_filters(filter_list, return_unique_inverse=True)
             else:
                 if type(filters) is str:
-                    self.filters = cpt.read_filters(filters)
+                    self.filters = cpt.read_filters(filters, return_unique_inverse=True)
                 else:
                     self.filters = filters
 
@@ -1624,7 +1640,7 @@ class prospector_mcmc:
 
             # if config is not provided, user NEED to provide filter, so no checking if it's None
             if type(filters) is str:
-                self.filters = cpt.read_filters(filters)
+                self.filters = cpt.read_filters(filters, return_unique_inverse=True)
             else:
                 self.filters = filters
             self.custom_model_obj = cpt.custom_prospector(sfh_type=self.sfh_type, filters=self.filters)
@@ -1743,7 +1759,7 @@ class prospector_mcmc:
         for i, key in enumerate(self.theta.keys):
             if key == 'logsfr_ratios':
                 for j in range(self.theta.n_each_theta[i]):
-                    self.theta.ylabels.append(f"logSFR_r{j+1}")
+                    self.theta.ylabels.append(f"logsfr_ratios{j}")
             else:
                 self.theta.ylabels.append(key)
 
@@ -1829,6 +1845,7 @@ class prospector_mcmc:
                  jitter=None,
                  nsteps=None,
                  zprior=None,
+                 output_dir=None,
                  save_sampler=None,
                  sampler_filename=None,
                  progress=None,
@@ -1882,6 +1899,7 @@ class prospector_mcmc:
         # discard = discard or self.discard
         # thin = thin or self.thin
         zprior = zprior or self.zprior
+        output_dir = output_dir or self.output_dir
         save_sampler = save_sampler or self.save_sampler
         sampler_filename = sampler_filename or self.sampler_filename
         parallel = parallel or self.parallel
@@ -1891,6 +1909,8 @@ class prospector_mcmc:
         initial_pos = initial + jitter * np.random.randn(nwalkers, self.theta.ndim)
         
         if save_sampler:
+            output_dir_path = Path(output_dir)
+            output_dir_path.mkdir(parents=True, exist_ok=True)
             backend = emcee.backends.HDFBackend(sampler_filename)
             backend.reset(nwalkers, self.theta.ndim)
         else:
@@ -2057,6 +2077,7 @@ def main():
     plots_dir = config_content['MCMC_settings']['plots_dir']
     output_dir = config_content['MCMC_settings']['output_dir']
     output_filename = config_content['MCMC_settings']['output_filename']
+    sampler_filename = config_content['MCMC_settings']['sampler_filename']
 
     
     # is argparse keywords are provided when running script, override the settings from config
@@ -2072,6 +2093,8 @@ def main():
         output_dir = args.output_dir
     if args.output_filename is not None:
         output_filename = args.output_filename
+    if args.sampler_filename is not None:
+        sampler_filename = args.sampler_filename
     if args.filter_list is not None:
         filter_list = args.filter_list
 
@@ -2098,7 +2121,7 @@ def main():
     discard = args.discard                      # None or int
     thin = args.thin                            # None or int
     save_sampler = args.save_sampler            # None or True
-    sampler_filename = args.sampler_filename    # None or str
+    # sampler_filename = args.sampler_filename    # None or str
     parallel = args.parallel                    # None or True
 
     # Following settings are also passed to prospector_mcmc class, but since they are opposite of argparse, 
@@ -2229,6 +2252,7 @@ def main():
                          qs_sfrsteps=qs_agebins_all_sfrs,
                          external_phots=external_phots,
                          save=True,
+                         wl_max=5.5,    # TEMP
                          filename=f"mcmc_results_sed_sfh_{spherex_id}.png",
                          output_dirname=plots_dir,
                          title_kwargs={

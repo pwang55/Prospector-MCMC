@@ -1,23 +1,23 @@
 # Configure file for prospector_mcmc.py
 Catalog:
-  filename: data/hotdog_l4_specz_collate_gals.parq
-  SPHERExRefID: 1663027938116763658
+  filename: /Users/brianwang76/SPHEREx/testing/highz_clouds/cosmos/collate/l4_collated_006836.parq
+  SPHERExRefID: 1645209205348499459
   filter_list: /Users/brianwang76/SPHEREx/SPHEREx-L4-Redshift-Pipeline/redshifts/data/FILTER/SPHEREx_306/fiducial_filters.txt
 
 MCMC_settings:
   nwalkers: 32
   jitter: 1.0E-4
-  nsteps: 10000
+  nsteps: 20000
   discard: 3000
   thin: 20
   zprior: True
   parallel: False
-  save_sampler: False
+  save_sampler: True
   sampler_filename: use_id    # specific text filename, or 'use_id' to save as pros_mcmc_{SPHERExRefID}.h5
   save_plots: True
-  plots_dir: outputs
+  plots_dir: outputs/1645209205348499459
   verbose: True
-  output_dir: outputs
+  output_dir: outputs/1645209205348499459
   output_filename: use_id     # filename without extension, for both report (.yaml) and mcmc results (.npz) 
 
 Parameters:
@@ -34,14 +34,15 @@ Parameters:
   # --------- parametric_sfh ---------
 
   # --------- continuity_sfh ---------
-  nbins: 5              # number of age bins, this CANNOT be a free parameter
-  logsfr_ratios: Y      # contains nbins-1 parameters
+  nbins: 7              # number of age bins, this CANNOT be a free parameter
   # --------- continuity_sfh ---------
 
   # common parameters
   zred: Y
-  logzsol: Y
   logmass: Y
+  logzsol: Y
+  # sfh parameters
+  logsfr_ratios: Y      # contains nbins-1 parameters
   # dust attenuation
   dust2: Y
   dust_ratio: 1.0
